@@ -38,10 +38,11 @@ install:
 	$(python) helper/completion_generator.py \
 		> ${buildroot}usr/share/bash-completion/completions/kiwi-ng
 	# kiwi default configuration
-	install -d -m 755 ${buildroot}etc
-	install -m 644 kiwi.yml ${buildroot}etc/kiwi.yml
-	# kiwi old XSL stylesheets for upgrade
 	install -d -m 755 ${buildroot}usr/share/kiwi
+	install -d -m 755 ${buildroot}usr/share/kiwi/kiwi.yml.d
+	install -d -m 755 ${buildroot}etc/kiwi.yml.d
+	install -m 644 kiwi.yml ${buildroot}usr/share/kiwi/kiwi.yml.example
+	# kiwi old XSL stylesheets for upgrade
 	cp -a helper/xsl_to_v74 ${buildroot}usr/share/kiwi/
 
 kiwi/schema/kiwi.rng: kiwi/schema/kiwi.rnc
@@ -155,6 +156,8 @@ build: clean check test
 	cp package/python-kiwi-rpmlintrc dist
 	# provide patches
 	cp package/*.patch dist
+	# provide additional source files
+	cp package/systemd-tmpfiles-for-suse.conf dist
 
 prepare_for_pypi: clean setup
 	# documentation render and tests
