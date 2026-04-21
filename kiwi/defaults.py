@@ -1515,6 +1515,7 @@ class Defaults:
             'qcow2',
             'vmdk',
             'ova',
+            'meta',
             'vmx',
             'vhd',
             'vhdx',
