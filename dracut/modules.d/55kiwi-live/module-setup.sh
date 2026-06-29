@@ -28,8 +28,9 @@ install() {
     inst_multiple -o checkmedia
     inst_multiple \
         umount dmsetup partx blkid lsblk dd losetup \
-        grep cut partprobe find wc fdisk tail mkfs.ext4 mkfs.xfs \
-        dialog cat mountpoint curl dolly dd
+        grep cut find wc fdisk tail mkfs.ext4 mkfs.xfs \
+        dialog cat mountpoint curl dolly dd \
+        flock udevadm sed
 
     dmsquashdir=$(find "${dracutbasedir}/modules.d" -name "*dmsquash-live")
     if [ -n "${dmsquashdir}" ] && \
