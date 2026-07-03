@@ -62,7 +62,7 @@ of {kiwi}, the following dracut modules are used:
    .. code:: none
 
       <type ... boot="{exc_netboot}"/>
-    
+
    While {kiwi} supports this approach, it is recommended using dracut instead.
    Keep also in mind that although {kiwi} supports creation of custom boot
    images, {kiwi} does not include any official boot image descriptions. You
@@ -293,6 +293,11 @@ the available kernel boot parameters for these modules:
 
    When setting `rd.kiwi.oem.installdevice` explicitly through the kernel command line,
    {kiwi} uses the device without prompting for confirmation.
+
+``rd.kiwi.oem.sha512``
+  Expect sha512 checksums and use the respective `sha512sum` tool and
+  the `.sha512` extension for filename match and checksum calculation.
+  By default sha256 is used.
 
 ``rd.live.overlay.size``
   Specifies the size for the `tmpfs` filesystem of a live ISO image that is used
