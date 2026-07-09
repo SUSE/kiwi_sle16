@@ -17,8 +17,9 @@
 #
 import os
 import logging
+import functools
 from typing import (
-    Literal, List, Optional
+    Literal, List, Optional, NamedTuple, Callable, Dict, Any
 )
 import yaml
 
@@ -27,6 +28,7 @@ import kiwi.defaults as defaults
 
 from kiwi.defaults import Defaults
 from kiwi.utils.size import StringToSize
+from kiwi.utils.checksum import Checksum
 from kiwi.exceptions import (
     KiwiRuntimeConfigFormatError,
     KiwiRuntimeConfigFileError
@@ -34,17 +36,22 @@ from kiwi.exceptions import (
 
 log = logging.getLogger('kiwi')
 
-RUNTIME_CONFIG = None
+RUNTIME_CONFIG: Optional[Dict[str, Any]] = None
+
+
+class ShasumT(NamedTuple):
+    suffix: str
+    digest: Callable
 
 
 class RuntimeConfig:
     """
-    **Implements reading of runtime configuration file:**
+    **Implements reading of runtime configuration files:**
 
-    1. Check for --config provided from the CLI
-    2. ~/.config/kiwi/config.yml
-    3. /etc/kiwi.yml + /etc/kiwi.yml.d/
-    4. /usr/share/kiwi/kiwi.yml + /usr/share/kiwi/kiwi.yml.d/
+    1. vendor: /usr/share/kiwi/kiwi.yml + /usr/share/kiwi/kiwi.yml.d/.yml
+    2. admin: /etc/kiwi.yml + /etc/kiwi.yml.d/.yml
+    3. ~/.config/kiwi/config.yml
+    4. Check for --config provided from the CLI
 
     The KIWI runtime configuration file is a yaml formatted file
     containing information to control the behavior of the tools
@@ -56,48 +63,45 @@ class RuntimeConfig:
         global RUNTIME_CONFIG
 
         if RUNTIME_CONFIG is None or reread:
-            config_file = None
-            config_dir = None
             custom_config_file = defaults.CUSTOM_RUNTIME_CONFIG_FILE
-
+            config_files = []
+            # 1. vendor
+            config_file = defaults.USR_RUNTIME_CONFIG_FILE
+            if os.path.exists(config_file):
+                config_files.append(config_file)
+            config_files += self._read_drop_ins_dir(
+                defaults.USR_RUNTIME_CONFIG_DIR
+            )
+            # 2. admin
+            config_file = defaults.ETC_RUNTIME_CONFIG_FILE
+            if os.path.exists(config_file):
+                config_files.append(config_file)
+            config_files += self._read_drop_ins_dir(
+                defaults.ETC_RUNTIME_CONFIG_DIR
+            )
+            # 3. home
+            if self._home_path():
+                config_file = os.sep.join(
+                    [self._home_path(), '.config', 'kiwi', 'config.yml']
+                )
+                if os.path.exists(config_file):
+                    config_files.append(config_file)
+            # 4. cmdline
             if custom_config_file:
                 config_file = custom_config_file
                 if not os.path.isfile(config_file):
                     raise KiwiRuntimeConfigFileError(
                         f'Custom config file {config_file!r} not found'
                     )
-            elif self._home_path():
-                config_file = os.sep.join(
-                    [self._home_path(), '.config', 'kiwi', 'config.yml']
-                )
-            if not config_file or not os.path.exists(config_file):
-                config_file = defaults.ETC_RUNTIME_CONFIG_FILE
-                if not os.path.exists(config_file):
-                    config_file = defaults.USR_RUNTIME_CONFIG_FILE
-            if os.path.exists(config_file):
+                config_files.append(config_file)
+            # read all config files...
+            RUNTIME_CONFIG = {}
+            for config_file in config_files:
                 log.info(
                     f'Reading runtime config file: {config_file!r}'
                 )
                 with open(config_file, 'r') as config:
-                    RUNTIME_CONFIG = yaml.safe_load(config) or {}
-
-                if config_file == defaults.ETC_RUNTIME_CONFIG_FILE:
-                    config_dir = defaults.ETC_RUNTIME_CONFIG_DIR
-                elif config_file == defaults.USR_RUNTIME_CONFIG_FILE:
-                    config_dir = defaults.USR_RUNTIME_CONFIG_DIR
-
-                if config_dir and os.path.isdir(config_dir):
-                    for config_file in sorted(os.listdir(config_dir)):
-                        if config_file.endswith('.yml'):
-                            config_file_path = os.path.normpath(
-                                os.sep.join([config_dir, config_file])
-                            )
-                            log.info(
-                                f'--> Reading addon runtime config file: {config_file_path!r}'
-                            )
-                            with open(config_file_path, 'r') as config:
-                                additional_config = yaml.safe_load(config) or {}
-                                RUNTIME_CONFIG.update(additional_config)
+                    RUNTIME_CONFIG.update(yaml.safe_load(config) or {})
 
     def get_credentials_verification_metadata_signing_key_file(self) -> str:
         """
@@ -251,6 +255,66 @@ class RuntimeConfig:
         if bundle_compress is None:
             bundle_compress = default
         return bool(bundle_compress)
+
+    def get_checksum_handler(
+        self,
+        source_filename: str,
+        target_filename: Optional[str] = None,
+        default: str = '256',
+        bundle_lookup: bool = False
+    ) -> ShasumT:
+        """
+        Return a ShasumT with information about the configured
+        shasum suffix name and the digest(Checksum) callable. The
+        following configuration setting allows to configure the
+        size of the checksum:
+
+        shasum:
+          - size: 256
+
+        bundle:
+          - shasum_size: "256"
+
+        Instructs kiwi to use the provided shasum size. Supported
+        values are 256 (default) and 512. In case of an unsupported
+        value the default is used. A value from the bundle section
+        takes precedence over the global shasum size specified
+        in the shasum section for creating bundle results. If no
+        information for bundle results is specified, the global
+        shasum size or the default applies.
+
+        :param str source_filename: filename to calculate checksum for
+        :param str target_filename: filename to write checksum to
+        :param str default: default size set to 256
+
+        :rtype: ShasumT
+        """
+        supported_shasums = {
+            '256': ShasumT(
+                suffix='.sha256',
+                digest=functools.partial(
+                    Checksum(source_filename).sha256, target_filename
+                )
+            ),
+            '512': ShasumT(
+                suffix='.sha512',
+                digest=functools.partial(
+                    Checksum(source_filename).sha512, target_filename
+                )
+            )
+        }
+        shasum_size = self._get_attribute(
+            element='shasum', attribute='size'
+        )
+        if bundle_lookup:
+            bundle_shasum_size = self._get_attribute(
+                element='bundle', attribute='shasum_size'
+            )
+            if bundle_shasum_size:
+                shasum_size = bundle_shasum_size
+        if supported_shasums.get(shasum_size):
+            return supported_shasums[shasum_size]
+        return supported_shasums['256']
 
     def get_xz_options(self) -> Optional[List[str]]:
         """
@@ -455,3 +519,14 @@ class RuntimeConfig:
 
     def _home_path(self) -> str:
         return os.environ.get('HOME') or ''
+
+    def _read_drop_ins_dir(self, config_dir: str) -> List[str]:
+        config_files = []
+        if os.path.isdir(config_dir):
+            for config_file in sorted(os.listdir(config_dir)):
+                if config_file.endswith('.yml'):
+                    config_file_path = os.path.normpath(
+                        os.sep.join([config_dir, config_file])
+                    )
+                    config_files.append(config_file_path)
+        return config_files
