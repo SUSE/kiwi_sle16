@@ -79,6 +79,13 @@ class InstallImageBuilder:
         self.root_filesystem_is_multipath = \
             xml_state.get_oemconfig_oem_multipath_scan()
         self.initrd_system = xml_state.get_initrd_system()
+        # an install boot menu entry and initrd is created for the
+        # kernel of each flavor, the empty flavor stands for the
+        # latest kernel. The first flavor is the one of the default
+        # menu entry and of the system booted after the installation
+        self.kernel_flavors = (
+            xml_state.get_build_type_bootloader_kernel_flavors() or ['']
+        )
         self.firmware = FirmWare(xml_state)
         self.setup = SystemSetup(
             self.xml_state, self.root_dir
@@ -313,7 +320,9 @@ class InstallImageBuilder:
 
         # the kexec required system image initrd is stored for dracut kiwi-dump
         if self.initrd_system == 'dracut':
-            boot_names = self.boot_image_task.get_boot_names()
+            boot_names = self.boot_image_task.get_boot_names(
+                self.kernel_flavors[0]
+            )
             system_image_initrd = os.sep.join(
                 [self.root_dir, 'boot', boot_names.initrd_name]
             )
@@ -378,11 +387,13 @@ class InstallImageBuilder:
         )
 
     def _create_pxe_install_kernel_and_initrd(self) -> None:
+        # The pxe boot uses the kernel of the first flavor
+        flavor = self.kernel_flavors[0]
         kernelname = 'pxeboot.{0}.kernel'.format(self.pxename)
         initrdname = 'pxeboot.{0}.initrd'.format(self.pxename)
         kernel = Kernel(self.boot_image_task.boot_root_directory)
-        if kernel.get_kernel():
-            kernel.copy_kernel(self.pxe_dir.name, kernelname)
+        if kernel.get_kernel(flavor=flavor):
+            kernel.copy_kernel(self.pxe_dir.name, kernelname, flavor=flavor)
             os.symlink(
                 kernelname, ''.join(
                     [
@@ -427,7 +438,7 @@ class InstallImageBuilder:
 
         self.boot_image_task.create_initrd(
             self.mbrid, 'initrd_kiwi_install',
-            install_initrd=True
+            install_initrd=True, flavor=flavor
         )
         Command.run(
             [
@@ -440,14 +451,23 @@ class InstallImageBuilder:
     def _create_iso_install_kernel_and_initrd(self) -> None:
         boot_path = self.media_dir.name + '/boot/' + self.arch + '/loader'
         Path.create(boot_path)
+        # see Defaults.get_iso_kernel_flavor_file_name() for the
+        # names of the kernel and initrd files of each flavor
         kernel = Kernel(self.boot_image_task.boot_root_directory)
-        if kernel.get_kernel():
-            kernel.copy_kernel(boot_path, '/linux')
-        else:
-            raise KiwiInstallBootImageError(
-                'No kernel in boot image tree %s found' %
-                self.boot_image_task.boot_root_directory
-            )
+        for index, flavor in enumerate(self.kernel_flavors):
+            if kernel.get_kernel(flavor=flavor):
+                kernel.copy_kernel(
+                    boot_path, '/' + Defaults.get_iso_kernel_flavor_file_name(
+                        'linux', index, flavor
+                    ), flavor=flavor
+                )
+            else:
+                raise KiwiInstallBootImageError(
+                    'No kernel{0} in boot image tree {1} found'.format(
+                        f' of flavor {flavor}' if flavor else '',
+                        self.boot_image_task.boot_root_directory
+                    )
+                )
         if self.xml_state.is_xen_server():
             if kernel.get_xen_hypervisor():
                 kernel.copy_xen_hypervisor(boot_path, '/xen.gz')
@@ -477,16 +497,19 @@ class InstallImageBuilder:
 
             self._add_system_image_boot_options_to_boot_image()
             self._add_system_identifier_to_boot_image()
-        self.boot_image_task.create_initrd(
-            self.mbrid, 'initrd_kiwi_install',
-            install_initrd=True
-        )
-        Command.run(
-            [
-                'mv', self.boot_image_task.initrd_filename,
-                boot_path + '/initrd'
-            ]
-        )
+        for index, flavor in enumerate(self.kernel_flavors):
+            self.boot_image_task.create_initrd(
+                self.mbrid, 'initrd_kiwi_install',
+                install_initrd=True, flavor=flavor
+            )
+            Command.run(
+                [
+                    'mv', self.boot_image_task.initrd_filename,
+                    boot_path + '/' + Defaults.get_iso_kernel_flavor_file_name(
+                        'initrd', index, flavor
+                    )
+                ]
+            )
 
     def _add_system_identifier_to_boot_image(self) -> None:
         filename = ''.join(
@@ -504,7 +527,9 @@ class InstallImageBuilder:
         self.boot_image_task.include_file(os.sep + os.path.basename(filename))
 
     def _copy_system_image_initrd_to_iso_image(self) -> None:
-        boot_names = self.boot_image_task.get_boot_names()
+        # The installed system is booted by kexec with the kernel of
+        # the first flavor, see Defaults.get_iso_kernel_flavor_file_name()
+        boot_names = self.boot_image_task.get_boot_names(self.kernel_flavors[0])
         system_image_initrd = os.sep.join(
             [self.root_dir, 'boot', boot_names.initrd_name]
         )
