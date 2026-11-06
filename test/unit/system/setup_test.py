@@ -97,11 +97,12 @@ class TestSystemSetup:
         )
         assert setup.arch == 'ix86'
 
+    @patch('kiwi.system.setup.Path.create')
     @patch('kiwi.command.Command.run')
     @patch('os.path.exists')
     @patch('kiwi.system.setup.glob.iglob')
     def test_import_description(
-        self, mock_iglob, mock_path, mock_command
+        self, mock_iglob, mock_path, mock_command, mock_Path_create
     ):
         mock_iglob.return_value = ['config-cdroot.tar.xz']
         mock_path.return_value = True
@@ -316,10 +317,11 @@ class TestSystemSetup:
         ]
         mock_create.assert_called_once_with('root_dir/image')
 
+    @patch('kiwi.system.setup.Path.create')
     @patch('kiwi.command.Command.run')
     @patch('os.path.exists')
     def test_import_description_configured_editboot_scripts_not_found(
-        self, mock_path, mock_command
+        self, mock_path, mock_command, mock_Path_create
     ):
         path_return_values = [False, True, True, True, True, True]
 
@@ -1717,9 +1719,15 @@ class TestSystemSetup:
     @patch('kiwi.system.setup.CommandCapabilities.has_option_in_help')
     @patch('kiwi.system.setup.Command.run')
     @patch('os.scandir')
+    @patch('os.access')
     def test_set_selinux_file_contexts_new_version(
-        self, mock_os_scandir, mock_command, mock_has_option_in_help
+        self,
+        mock_os_access,
+        mock_os_scandir,
+        mock_command,
+        mock_has_option_in_help,
     ):
+        mock_os_access.return_value = True
         mock_has_option_in_help.return_value = False
         mock_os_scandir.return_value = self.selinux_policies
         self.setup.set_selinux_file_contexts('security_context_file')
@@ -1750,9 +1758,15 @@ class TestSystemSetup:
     @patch('kiwi.system.setup.CommandCapabilities.has_option_in_help')
     @patch('kiwi.system.setup.Command.run')
     @patch('os.scandir')
+    @patch('os.access')
     def test_set_selinux_file_contexts_old_version(
-        self, mock_os_scandir, mock_command, mock_has_option_in_help
+        self,
+        mock_os_access,
+        mock_os_scandir,
+        mock_command,
+        mock_has_option_in_help,
     ):
+        mock_os_access.return_value = True
         mock_has_option_in_help.return_value = True
         mock_os_scandir.return_value = self.selinux_policies
         self.setup.set_selinux_file_contexts('security_context_file')
@@ -1775,9 +1789,11 @@ class TestSystemSetup:
 
     @patch('kiwi.system.setup.Command.run')
     @patch('os.scandir')
+    @patch('os.access')
     def test_set_selinux_file_contexts_raises(
-        self, mock_os_scandir, mock_command
+        self, mock_os_access, mock_os_scandir, mock_command
     ):
+        mock_os_access.return_value = True
         mock_os_scandir.side_effect = Exception
         with raises(KiwiFileNotFound):
             self.setup.set_selinux_file_contexts('security_context_file')

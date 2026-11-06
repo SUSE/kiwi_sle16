@@ -6223,7 +6223,7 @@ class bootloader(GeneratedsSuper):
     provide configuration parameters for it"""
     subclass = None
     superclass = None
-    def __init__(self, name=None, bls=None, console=None, serial_line=None, timeout=None, timeout_style=None, targettype=None, use_disk_password=None, grub_template=None, bootloadersettings=None, securelinux=None):
+    def __init__(self, name=None, bls=None, console=None, serial_line=None, timeout=None, timeout_style=None, targettype=None, use_disk_password=None, grub_template=None, kernel_flavor=None, bootloadersettings=None, securelinux=None):
         self.original_tagname_ = None
         self.name = _cast(None, name)
         self.bls = _cast(bool, bls)
@@ -6234,6 +6234,7 @@ class bootloader(GeneratedsSuper):
         self.targettype = _cast(None, targettype)
         self.use_disk_password = _cast(bool, use_disk_password)
         self.grub_template = _cast(None, grub_template)
+        self.kernel_flavor = _cast(None, kernel_flavor)
         if bootloadersettings is None:
             self.bootloadersettings = []
         else:
@@ -6281,6 +6282,8 @@ class bootloader(GeneratedsSuper):
     def set_use_disk_password(self, use_disk_password): self.use_disk_password = use_disk_password
     def get_grub_template(self): return self.grub_template
     def set_grub_template(self, grub_template): self.grub_template = grub_template
+    def get_kernel_flavor(self): return self.kernel_flavor
+    def set_kernel_flavor(self, kernel_flavor): self.kernel_flavor = kernel_flavor
     def validate_grub_console(self, value):
         # Validate type grub_console, a restriction on xs:token.
         if value is not None and Validate_simpletypes_:
@@ -6288,6 +6291,13 @@ class bootloader(GeneratedsSuper):
                     self.validate_grub_console_patterns_, value):
                 warnings_.warn('Value "%s" does not match xsd pattern restrictions: %s' % (value.encode('utf-8'), self.validate_grub_console_patterns_, ))
     validate_grub_console_patterns_ = [['^(none|console|gfxterm|serial|vga_text|mda_text|morse|spkmodem)( (none|console|serial|at_keyboard|usb_keyboard))*$']]
+    def validate_kernel_flavor_list(self, value):
+        # Validate type kernel-flavor-list, a restriction on xs:token.
+        if value is not None and Validate_simpletypes_:
+            if not self.gds_validate_simple_patterns(
+                    self.validate_kernel_flavor_list_patterns_, value):
+                warnings_.warn('Value "%s" does not match xsd pattern restrictions: %s' % (value.encode('utf-8'), self.validate_kernel_flavor_list_patterns_, ))
+    validate_kernel_flavor_list_patterns_ = [['^[a-zA-Z0-9_\\-\\.]+(,[a-zA-Z0-9_\\-\\.]+)*$']]
     def hasContent_(self):
         if (
             self.bootloadersettings or
@@ -6345,6 +6355,9 @@ class bootloader(GeneratedsSuper):
         if self.grub_template is not None and 'grub_template' not in already_processed:
             already_processed.add('grub_template')
             outfile.write(' grub_template=%s' % (self.gds_encode(self.gds_format_string(quote_attrib(self.grub_template), input_name='grub_template')), ))
+        if self.kernel_flavor is not None and 'kernel_flavor' not in already_processed:
+            already_processed.add('kernel_flavor')
+            outfile.write(' kernel_flavor=%s' % (quote_attrib(self.kernel_flavor), ))
     def exportChildren(self, outfile, level, namespaceprefix_='', name_='bootloader', fromsubclass_=False, pretty_print=True):
         if pretty_print:
             eol_ = '\n'
@@ -6418,6 +6431,12 @@ class bootloader(GeneratedsSuper):
         if value is not None and 'grub_template' not in already_processed:
             already_processed.add('grub_template')
             self.grub_template = value
+        value = find_attr_value_('kernel_flavor', node)
+        if value is not None and 'kernel_flavor' not in already_processed:
+            already_processed.add('kernel_flavor')
+            self.kernel_flavor = value
+            self.kernel_flavor = ' '.join(self.kernel_flavor.split())
+            self.validate_kernel_flavor_list(self.kernel_flavor)    # validate type kernel-flavor-list
     def buildChildren(self, child_, node, nodeName_, fromsubclass_=False):
         if nodeName_ == 'bootloadersettings':
             obj_ = bootloadersettings.factory()

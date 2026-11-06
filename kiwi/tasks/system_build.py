@@ -380,6 +380,8 @@ class SystemBuildTask(CliTask):
         self.run_checks(
             {
                 'check_dracut_module_versions_compatible_to_kiwi':
+                    [image_root],
+                'check_kernel_flavors_installed':
                     [image_root]
             }
         )

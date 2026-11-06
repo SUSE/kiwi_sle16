@@ -82,6 +82,14 @@ class TestDefaults:
         assert Defaults.get_live_dracut_modules_from_flag('dmsquash') == \
             ['dmsquash-live', 'livenet']
 
+    def test_get_iso_kernel_flavor_file_name(self):
+        assert Defaults.get_iso_kernel_flavor_file_name('linux', 0, 'rt') == (
+            'linux'
+        )
+        assert Defaults.get_iso_kernel_flavor_file_name(
+            'initrd', 1, 'default'
+        ) == ('initrd-default')
+
     def test_get_iso_boot_path(self):
         Defaults.set_platform_name('i686')
         assert Defaults.get_iso_boot_path() == 'boot/ix86'

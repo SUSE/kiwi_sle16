@@ -89,6 +89,8 @@ class SystemCreateTask(CliTask):
                 'check_dracut_module_versions_compatible_to_kiwi':
                     [abs_root_path],
                 'check_target_dir_on_unsupported_filesystem':
+                    [abs_root_path],
+                'check_kernel_flavors_installed':
                     [abs_root_path]
             }
         )
