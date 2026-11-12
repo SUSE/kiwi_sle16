@@ -20,8 +20,21 @@ installkernel() {
 install() {
     declare moddir=${moddir}
     declare systemdutildir=${systemdutildir}
+    declare dracutbasedir=${dracutbasedir}
+    local dmsquashdir=
     inst_multiple \
-        tr lsblk dd sha256sum sha512sum head pv kexec basename awk kpartx sort
+        tr lsblk dd sha256sum sha512sum head pv kexec basename awk kpartx sort \
+        mount umount losetup cp
+
+    # support booting the install ISO as a file on disk via
+    # iso-scan/filename=, e.g. through a grub loopback setup
+    dmsquashdir=$(find "${dracutbasedir}/modules.d" -name "*dmsquash-live")
+    if [[ -n "${dmsquashdir}" ]] && \
+        [[ -f "${dmsquashdir}/parse-iso-scan.sh" ]] && \
+        [[ -f "${dmsquashdir}/iso-scan.sh" ]]; then
+        inst_hook cmdline 31 "${dmsquashdir}/parse-iso-scan.sh"
+        inst_script "${dmsquashdir}/iso-scan.sh" "/sbin/iso-scan"
+    fi
 
     inst_hook pre-udev 30 "${moddir}/kiwi-installer-genrules.sh"
 
